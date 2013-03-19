@@ -3,7 +3,10 @@
 include(__DIR__.'/digitalDownload.php');
 use DigitalDownload\DigitalDownload;
 
-if (DigitalDownload::DD_INSTALL)
+$dd = new DigitalDownload();
+$dd->install = 1;
+
+if (1 == $dd->install)
 {
 	DigitalDownload::installDigitalDownload();
 }

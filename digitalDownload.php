@@ -19,65 +19,43 @@ class DigitalDownload
 	 * 
 	 */
 	
+	protected $host = 'general.dev'; // change this with your domain name
 	
-	/**
-	 * HOST
-	 */
-	// change this with your domain name
-	const DD_HOST = 'general.dev';
+	static $downloadsAllowed	= 1; // Set to 1 to allow downloads, 0 otherwise
 	
-	
-	/**
-	 * Directives
-	 */
-	// Set to 1 to reinstall and regenerate the codes, 0 otherwise
-	const DD_INSTALL	= 1;
-	
-	// Create labels at the end of installation
-	const DD_CREATE_LABELS = 1;
-	// Create a pdf with the labels at the end of installation
-	const DD_CREATE_PDF = 1;
-	const DD_PDF_ORIENTATION = 'L'; // P or L
-	const DD_PDF_DPI = 300; 
-	// Regenerate ONLY the pdf, not the labels
-	const DD_REGENERATE_PDF = 1;
-	
-	// 0 = download directly the pdf, 1 = save pdf in labels directory with name 'labels.pdf'
-	const DD_DOWNLOAD_PDF = 0;
-	
-	// Set to 1 to allow downloads, 0 otherwise
-	const DD_DOWNLOAD_ALLOWED	= 1;
-	
-	const DD_FULL_PATH = DD_DIR;
-	const DD_DOWNLOAD_DIRECTORY = DD_PATH;
-	const DD_LABELS_DIRECTORY = DD_L_PATH;
-	const DD_LABEL_BACKGROUND_FILENAME = 'digitaldownload.gif';
-	
-	// File to download listed in the 'download' directory
-	const DD_FILE_NAME = 'ajax-loader.gif'; 
-	
-	/**
-	 * Basic configuration
-	 */
-	// how many long are the code string?
-	const DD_CODE_STRING_LENGHT = 10;
-	// how many codes?
-	const DD_CODE_NUM = 2;
-	// how many time a code is valid?
-	const DD_LIMIT_NUM_DOWNLOAD  = 0; // 0 = unlimited
-	// hour numbers from first use to expire
-	const DD_LIMIT_TIME_DOWNLOAD = 0; // 0 = unlimited
+	public $install	= 1; // Set to 1 to reinstall and regenerate the codes, 0 otherwise
+	public $createLabel = 1; // Create labels at the end of installation
+	public $createPdf = 1; // Create a pdf with the labels at the end of installation
+	public $pdfOrientation = 'L'; // P or L
+	public $pdfDpi = 300; 
+	public $regeneratePdf = 1; // During installation regenerate ONLY the pdf, not the labels
+	public $downloadPdf = 0; // At the end of installation, or regeneration of pdf: 0 = download directly the pdf, 1 = save pdf in labels directory with name 'labels.pdf'
 	
 	
-	/**
-	*	Db configuration
-	*/
+	public $fullPath= DD_DIR;
+	public $downloadDirectory = DD_PATH;
+	public $labelsDirectory = DD_L_PATH;
+	public $backgroundFileName = 'digitaldownload.gif';
+	
+	
+	public $fileToDownload = 'ajax-loader.gif'; // File to download listed in the 'download' directory
+	
+	public $codeLenght = 10; // how many long are the code string?
+	public $codeNum = 2; // how many codes?
+	public $limitNumDownload = 0; // how many time a code is valid? 0 = unlimited 
+	public $limitByHour = 0; // hour numbers from first use to expire 0 = unlimited
+	
 	const DD_DB_HOST = 'localhost';
 	const DD_DB_USER = 'root';
 	const DD_DB_PASS =  'fr3k3t3';
 	const DD_DB_DATABASE = 'file_download_manager';
 	const DD_DB_CODES_TABLE = 'DD_codes';
 	const DD_DB_LOG_TABLE = 'DD_downloads_logger';
+	
+	
+	public $eof	= "<br/>";
+	public $titleOpen 	= "<h3>";
+	public $titleClose = "</h3>";
 	
 	/**
 	 * 
@@ -95,61 +73,65 @@ class DigitalDownload
 	protected $responseCode;
 	
 	
+	
+	public function __construct() {}
+	
+	
 	/**
 	 * Let's go!
 	 */
-	public function __construct($code)
-	{
+	public function download($code){
 		try {
-			
+				
 			$date = new \DateTime();
 			$now = $date->format('Y-m-d H:i:s');
 			$dateLimit = '0000-00-00 00:00:00';
-			
+				
 			$conn = self::createDbConnection();
-			
+				
 			$query = 'SELECT COUNT(1) AS allowed, id FROM '.self::DD_DB_CODES_TABLE.' WHERE `code` = :code';
-			
-			if ( self::DD_LIMIT_NUM_DOWNLOAD != 0) 
+				
+			if ( self::DD_LIMIT_NUM_DOWNLOAD != 0)
 			{
 				$query .= ' AND download_numbers < downloads_number_limit';
 			}
-			
+				
 			if ( self::DD_LIMIT_TIME_DOWNLOAD != 0)
 			{
 				$dateLimit = $date->add(new \DateInterval('P'.self::DD_LIMIT_TIME_DOWNLOAD.'D'));
-				
+		
 				$query .= " AND $now < $dateLimit";
 			}
-			
+				
 			$query .= ' LIMIT 1';
-			
+				
 			$stmt = $conn->prepare($query);
 			$stmt->execute( array(':code' => $code) );
-			
+				
 			$result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-			
+				
 			if (count($result) && $result[0]['allowed'] != 0)
 			{
 				$this->userIp = $_SERVER['REMOTE_ADDR'];
 				$this->downloadDate = $now;
 				$this->code = $code;
 				$this->codeId = $result[0]['id'];
-				
+		
 				$this->makeDownload();
 			}
 			else {
 				$this->responseCode = 203;
 				$this->return = 'No results found with this code or code are invalid.';
 			}
-			
+				
 			self::closeDbConnetion();
-			
+				
 		} catch( \PDOException $e) {
 			$this->responseCode = 204;
 			$this->return = 'ERROR: '.$e->getMessage();
 		}
 	}
+	
 	
 	protected function logDownload()
 	{
@@ -229,38 +211,14 @@ class DigitalDownload
 	}
 	
 	/**
-	 * Get method used to run the script
-	 */
-	public static function isCli()
-	{
-		if(php_sapi_name() == 'cli' && empty($_SERVER['REMOTE_ADDR'])) 
-		{
-			return true;
-		} else {
-			
-			if (strpos(self::DD_HOST, $_SERVER['HTTP_HOST']) === false)
-			{
-				// request made outside blocked
-				die('host '.$_SERVER['HTTP_HOST']);
-			}
-			
-			return false;
-		}
-	}
-	
-	/**
 	 * Installation!
 	 */
-	public static function installDigitalDownload()
+	public function installDigitalDownload()
 	{
-		if( self::DD_REGENERATE_PDF){
-			$isCli 		= self::isCli();
-			$eof 		= ($isCli) ? PHP_EOL : "<br/>";
-			$titleOpen 	= ($isCli) ? "::: " : "<h3>";
-			$titleClose = ($isCli) ? " :::" : "</h3>";
+		if( $this->regeneratePdf){
 			
 			$message = '';
-			$message .= $titleOpen.'Digital Download will generate the pdf with labels'.$titleClose.$eof;
+			$message .= $this->titleOpen.'Digital Download will generate the pdf with labels'.$this->titleClose.$this->eof;
 			$message .= $eof;
 			echo $message;
 			
@@ -279,7 +237,7 @@ class DigitalDownload
 			$conn->exec("DROP TABLE IF EXISTS `".self::DD_DB_CODES_TABLE."`;");
 			$conn->exec("CREATE TABLE IF NOT EXISTS `".self::DD_DB_CODES_TABLE."` (
 					`id` bigint(20) NOT NULL AUTO_INCREMENT,
-					`code` varchar(".self::DD_CODE_STRING_LENGHT.") NOT NULL,
+					`code` varchar(".$this->codeLenght.") NOT NULL,
 					`first_use_date` datetime NOT NULL,
 					`date_limit` datetime NOT NULL,
 					`download_numbers` int(11) NOT NULL,
@@ -302,60 +260,55 @@ class DigitalDownload
 		
 			// generate codes
 		
-			for ($i = 0; $i < self::DD_CODE_NUM; $i++)
+			for ($i = 0; $i < $this->codeNum; $i++)
 			{
 				$r = rand(0,1000000000000000);
-				$code = substr(strtoupper(sha1(sha1(($r)))), 1, self::DD_CODE_STRING_LENGHT);
+				$code = substr(strtoupper(sha1(sha1(($r)))), 1, $this->codeLenght);
 		
 				$conn->exec("INSERT INTO ".self::DD_DB_CODES_TABLE." (code, first_use_date, date_limit, download_numbers, downloads_number_limit)
-						VALUES ('".$code."', '0000-00-00 00:00:00', '0000-00-00 00:00:00', '0', '".self::DD_LIMIT_NUM_DOWNLOAD."');");
+						VALUES ('".$code."', '0000-00-00 00:00:00', '0000-00-00 00:00:00', '0', '".$this->limitNumDownload."');");
 			}
 		
 			self::closeDbConnetion();
 			
-			$isCli 		= self::isCli();
-			$eof 		= ($isCli) ? PHP_EOL : "<br/>";
-			$titleOpen 	= ($isCli) ? "::: " : "<h3>";
-			$titleClose = ($isCli) ? " :::" : "</h3>";
-			
 			$message = '';
-			$message .= $titleOpen.'Digital Download is installed'.$titleClose.$eof;
-			$message .= 'The installer has generated '.self::DD_CODE_NUM.' codes'.$eof;
+			$message .= $this->titleOpen.'Digital Download is installed'.$this->titleClose.$this->eof;
+			$message .= 'The installer has generated '.$this->codeNum.' codes'.$this->eof;
 			
-			if (self::DD_LIMIT_NUM_DOWNLOAD == 0)
+			if ($this->limitNumDownload == 0)
 			{
-				$message .= 'Download is not limited on count'.$eof;
+				$message .= 'Download is not limited on count'.$this->eof;
 			}
 			else {
-				$message .= 'Every code can be used '.self::DD_LIMIT_NUM_DOWNLOAD.$eof;
+				$message .= 'Every code can be used '.self::DD_LIMIT_NUM_DOWNLOAD.$this->eof;
 			}
 			
-			if (self::DD_LIMIT_TIME_DOWNLOAD == 0)
+			if ($this->limitByHour == 0)
 			{
 				$message .= 'Download is not limited on time'.$eof;
 			}
 			else {
-				$message .= 'Every code can be used for '.self::DD_LIMIT_TIME_DOWNLOAD.' after first download before it expire'.$eof;
+				$message .= 'Every code can be used for '.$this->limitByHour.' after first download before it expire'.$this->eof;
 			}
 			
 			echo $message;
 			
 			// generate labels
-			if (self::DD_CREATE_LABELS)
+			if ($this->createLabel)
 			{
 				$message = '';
-				$message .= $titleOpen.'Digital Download will generate labels'.$titleClose.$eof;
-				$message .= $eof;
+				$message .= $this->titleOpen.'Digital Download will generate labels'.$this->titleClose.$this->eof;
+				$message .= $this->eof;
 				echo $message;
 				
 				self::generateLabels();
 				
 				// generate pdf with all images
-				if (self::DD_CREATE_PDF)
+				if ($this->createPdf)
 				{
 					$message = '';
-					$message .= $titleOpen.'Digital Download will generate the pdf with labels'.$titleClose.$eof;
-					$message .= $eof;
+					$message .= $this->titleOpen.'Digital Download will generate the pdf with labels'.$this->titleClose.$this->eof;
+					$message .= $this->eof;
 					echo $message;
 						
 					self::generatePdf();
@@ -371,7 +324,7 @@ class DigitalDownload
 	}
 	
 	
-	private static function generatePdf()
+	private function generatePdf()
 	{
 		if ($handle = opendir(self::DD_LABELS_DIRECTORY)) {
 			
@@ -437,6 +390,7 @@ class DigitalDownload
 			
 			if(self::DD_DOWNLOAD_PDF)
 			{
+				$pdf->Output(self::DD_LABELS_DIRECTORY.'/labels.pdf','F');
 				$pdf->Output();
 			}
 			else 
