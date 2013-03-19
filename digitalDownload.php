@@ -36,7 +36,12 @@ class DigitalDownload
 	// Create labels at the end of installation
 	const DD_CREATE_LABELS = 1;
 	// Create a pdf with the labels at the end of installation
-	const DD_CREATE_PDF = 0;
+	const DD_CREATE_PDF = 1;
+	const DD_PDF_ORIENTATION = 'L'; // P or L
+	const DD_PDF_DPI = 300; 
+	// Regenerate ONLY the pdf, not the labels
+	const DD_REGENERATE_PDF = 1;
+	
 	// 0 = download directly the pdf, 1 = save pdf in labels directory with name 'labels.pdf'
 	const DD_DOWNLOAD_PDF = 0;
 	
@@ -248,6 +253,24 @@ class DigitalDownload
 	 */
 	public static function installDigitalDownload()
 	{
+		if( self::DD_REGENERATE_PDF){
+			$isCli 		= self::isCli();
+			$eof 		= ($isCli) ? PHP_EOL : "<br/>";
+			$titleOpen 	= ($isCli) ? "::: " : "<h3>";
+			$titleClose = ($isCli) ? " :::" : "</h3>";
+			
+			$message = '';
+			$message .= $titleOpen.'Digital Download will generate the pdf with labels'.$titleClose.$eof;
+			$message .= $eof;
+			echo $message;
+			
+			self::generatePdf();
+			
+			exit();
+		}
+		
+		
+		
 		try {
 			
 			$conn = self::createDbConnection();
@@ -352,15 +375,61 @@ class DigitalDownload
 	{
 		if ($handle = opendir(self::DD_LABELS_DIRECTORY)) {
 			
-			$pdf = new \taylorPdf("P", "pt", "A4");
+			$pdf = new \taylorPdf(self::DD_PDF_ORIENTATION, "pt", "A4");
+			
+			$first = 1;
+			$newPage = 1;
+			$marginX = 10;
+			$marginY = 10;
+			$addPage = 0;
+			$pageX = 0;
+			$pageY = 0;
+			
+			if('P' == self::DD_PDF_ORIENTATION) {
+				$pageWidth = '595';
+				$pageHeight = '841';
+			}
+			else {
+				$pageWidth = '841';
+				$pageHeight = '595';
+			}
 			
 			while (false !== ($file = readdir($handle))) {
-				if ($file != "." && $file != ".." && $file != self::DD_LABEL_BACKGROUND_FILENAME) {
+				if ($file != "." && $file != ".." && $file != self::DD_LABEL_BACKGROUND_FILENAME && substr($file, -3) !== 'pdf') {
+					
 					list($width, $height, $type, $attr) = getimagesize(self::DD_LABELS_DIRECTORY.$file);
-					$pdf->AddPage();
-					$width = $width * 72 / 96;
-					$height = $width * 72 / 96;
-					$pdf->Image(self::DD_LABELS_DIRECTORY.$file,5,50, $width, $height);					
+					
+					if(1 == $first) {
+						$pdf->AddPage();
+						$pageX = $marginX;
+						$pageY = $marginY;
+					}
+					else {
+						$pageX = $pageX + $marginX;
+					}
+					
+					$width = $width * 72 / self::DD_PDF_DPI;
+					$height = $height * 72 / self::DD_PDF_DPI;
+					
+					
+					
+					if( ($pageX + $width) >= $pageWidth ){
+						$pageX = $marginX;
+						$pageY = $pageY + $marginY + $height;
+					}
+					
+					if( ($pageY + $height) >= $pageHeight)
+					{
+						$pdf->AddPage();
+						$pageX = $marginX;
+						$pageY = $marginY;
+					}
+					
+					$pdf->Image(self::DD_LABELS_DIRECTORY.$file,$pageX,$pageY, $width, $height);
+					$pageX = $pageX + $width;
+					$first = 0;
+					
+					//echo ($pageX.'-'.$pageY.'<br>');
 				}
 				
 			}
