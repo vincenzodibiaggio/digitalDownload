@@ -21,7 +21,7 @@ class DigitalDownload
 	
 	protected $host = 'general.dev'; // change this with your domain name
 	
-	static $downloadsAllowed	= 1; // Set to 1 to allow downloads, 0 otherwise
+	public $downloadsAllowed	= 1; // Set to 1 to allow downloads, 0 otherwise
 	
 	public $install	= 1; // Set to 1 to reinstall and regenerate the codes, 0 otherwise
 	public $createLabel = 1; // Create labels at the end of installation
@@ -30,14 +30,13 @@ class DigitalDownload
 	public $pdfDpi = 300; 
 	public $regeneratePdf = 1; // During installation regenerate ONLY the pdf, not the labels
 	public $downloadPdf = 0; // At the end of installation, or regeneration of pdf: 0 = download directly the pdf, 1 = save pdf in labels directory with name 'labels.pdf'
-	
+	public $pdfMarginX = 10; // Left margin
+	public $pdfMarginY = 10; // Right margin
 	
 	public $fullPath= DD_DIR;
 	public $downloadDirectory = DD_PATH;
 	public $labelsDirectory = DD_L_PATH;
 	public $backgroundFileName = 'digitaldownload.gif';
-	
-	
 	public $fileToDownload = 'ajax-loader.gif'; // File to download listed in the 'download' directory
 	
 	public $codeLenght = 10; // how many long are the code string?
@@ -91,14 +90,14 @@ class DigitalDownload
 				
 			$query = 'SELECT COUNT(1) AS allowed, id FROM '.self::DD_DB_CODES_TABLE.' WHERE `code` = :code';
 				
-			if ( self::DD_LIMIT_NUM_DOWNLOAD != 0)
+			if ( $this->limitNumDownload != 0)
 			{
 				$query .= ' AND download_numbers < downloads_number_limit';
 			}
 				
-			if ( self::DD_LIMIT_TIME_DOWNLOAD != 0)
+			if ( $this->limitByHour != 0)
 			{
-				$dateLimit = $date->add(new \DateInterval('P'.self::DD_LIMIT_TIME_DOWNLOAD.'D'));
+				$dateLimit = $date->add(new \DateInterval('P'.$this->limitByHour.'D'));
 		
 				$query .= " AND $now < $dateLimit";
 			}
@@ -161,15 +160,6 @@ class DigitalDownload
 		
 	}
 	
-	public function giveReturn()
-	{
-		return $this->return;
-	}
-	public function giveResponseCode()
-	{
-		return $this->responseCode;
-	}
-	
 	/**
 	 * Create or retreive db connection
 	 */
@@ -194,6 +184,8 @@ class DigitalDownload
 		}
 	}
 	
+	
+	
 	/**
      * Close db connection 
 	 */
@@ -210,6 +202,8 @@ class DigitalDownload
 		}
 	}
 	
+	
+	
 	/**
 	 * Installation!
 	 */
@@ -219,15 +213,13 @@ class DigitalDownload
 			
 			$message = '';
 			$message .= $this->titleOpen.'Digital Download will generate the pdf with labels'.$this->titleClose.$this->eof;
-			$message .= $eof;
+			$message .= $this->eof;
 			echo $message;
 			
 			self::generatePdf();
 			
 			exit();
 		}
-		
-		
 		
 		try {
 			
@@ -314,9 +306,6 @@ class DigitalDownload
 					self::generatePdf();
 				}
 			}
-			
-			
-		
 		}
 		catch (Exception $e) {
 			echo $e->getMessage();
@@ -324,28 +313,31 @@ class DigitalDownload
 	}
 	
 	
+	
 	private function generatePdf()
 	{
-		if ($handle = opendir(self::DD_LABELS_DIRECTORY)) {
+		if ($handle = opendir($this->labelsDirectory)) {
 			
-			$pdf = new \taylorPdf(self::DD_PDF_ORIENTATION, "pt", "A4");
-			
-			$first = 1;
-			$newPage = 1;
-			$marginX = 10;
-			$marginY = 10;
-			$addPage = 0;
-			$pageX = 0;
-			$pageY = 0;
-			
-			if('P' == self::DD_PDF_ORIENTATION) {
+			if('P' == $this->pdfOrientation) {
 				$pageWidth = '595';
 				$pageHeight = '841';
 			}
-			else {
+			elseif ('L' == $this->pdfOrientation) {
 				$pageWidth = '841';
 				$pageHeight = '595';
 			}
+			else { throw new Exception('PDF Orientation is wrong'); }
+			
+			$pdf = new \taylorPdf($this->pdfOrientation, "pt", "A4");
+			
+			$first = 1;
+			$addPage = 0;
+			
+			$marginX = $this->pdfMarginX;
+			$marginY = $this->pdfMarginY;
+			$pageX = $this->pdfMarginX;
+			$pageY = $this->pdfMarginY;
+			
 			
 			while (false !== ($file = readdir($handle))) {
 				if ($file != "." && $file != ".." && $file != self::DD_LABEL_BACKGROUND_FILENAME && substr($file, -3) !== 'pdf') {
@@ -354,35 +346,32 @@ class DigitalDownload
 					
 					if(1 == $first) {
 						$pdf->AddPage();
-						$pageX = $marginX;
-						$pageY = $marginY;
+						$pageX = $this->pdfMarginX;
+						$pageY = $this->pdfMarginY;
 					}
 					else {
-						$pageX = $pageX + $marginX;
+						$pageX = $pageX + $this->pdfMarginX;
 					}
 					
-					$width = $width * 72 / self::DD_PDF_DPI;
-					$height = $height * 72 / self::DD_PDF_DPI;
-					
-					
+					$width = $width * 72 / $this->pdfDpi;
+					$height = $height * 72 / $this->pdfDpi;
 					
 					if( ($pageX + $width) >= $pageWidth ){
-						$pageX = $marginX;
-						$pageY = $pageY + $marginY + $height;
+						$pageX = $this->pdfMarginX;
+						$pageY = $pageY + $this->pdfMarginY + $height;
 					}
 					
 					if( ($pageY + $height) >= $pageHeight)
 					{
 						$pdf->AddPage();
-						$pageX = $marginX;
-						$pageY = $marginY;
+						$pageX = $this->pdfMarginX;
+						$pageY = $this->pdfMarginY;
 					}
 					
 					$pdf->Image(self::DD_LABELS_DIRECTORY.$file,$pageX,$pageY, $width, $height);
 					$pageX = $pageX + $width;
 					$first = 0;
 					
-					//echo ($pageX.'-'.$pageY.'<br>');
 				}
 				
 			}
@@ -390,12 +379,12 @@ class DigitalDownload
 			
 			if(self::DD_DOWNLOAD_PDF)
 			{
-				$pdf->Output(self::DD_LABELS_DIRECTORY.'/labels.pdf','F');
+				$pdf->Output($this->labelsDirectory.'/labels.pdf','F');
 				$pdf->Output();
 			}
 			else 
 			{
-				$pdf->Output(self::DD_LABELS_DIRECTORY.'/labels.pdf','F');
+				$pdf->Output($this->labelsDirectory.'/labels.pdf','F');
 			}
 		}
 		
@@ -419,7 +408,7 @@ class DigitalDownload
 					$image = new writeOverImage();
 					
 					$image->backgroundImagePath = 'labels/'; // image path with trailing slash
-					$image->backgroundImage = self::DD_LABEL_BACKGROUND_FILENAME; // image name
+					$image->backgroundImage = $this->backgroundFileName; // image name
 					$image->stringColorRed = 0;
 					$image->stringColorGreen = 0;
 					$image->stringColorBlue = 0;
@@ -444,8 +433,14 @@ class DigitalDownload
 		} catch (\PDOException $e) {
 			echo 'ERROR: '.$e->getMessage();
 		}
-		
-		
-		
+	}
+	
+	
+	
+	public function giveReturn() {
+		return $this->return;
+	}
+	public function giveResponseCode() {
+		return $this->responseCode;
 	}
 }

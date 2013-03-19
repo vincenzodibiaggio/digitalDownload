@@ -3,7 +3,9 @@
 include(__DIR__.'/digitalDownload.php');
 use DigitalDownload\DigitalDownload;
 
-if (DigitalDownload::DD_DOWNLOAD_ALLOWED == 1 && DigitalDownload::DD_INSTALL == 0)
+$dd = new DigitalDownload();
+
+if ( 1 == $dd->downloadsAllowed && 0 == $dd->install)
 {
 	session_start();
 	
@@ -20,7 +22,7 @@ if (DigitalDownload::DD_DOWNLOAD_ALLOWED == 1 && DigitalDownload::DD_INSTALL == 
 		session_write_close();
 		session_destroy();
 		
-		$fileName = DigitalDownload::DD_DOWNLOAD_DIRECTORY.DigitalDownload::DD_FILE_NAME;
+		$fileName = $dd->downloadDirectory.$dd->fileToDownload;
 		$fileSize = filesize($fileName);
 		
 		/**
@@ -40,25 +42,15 @@ if (DigitalDownload::DD_DOWNLOAD_ALLOWED == 1 && DigitalDownload::DD_INSTALL == 
 		
 		$file = @fopen($fileName,"rb");
 		
-		/**
-		 * @todo LOG DOWNLOAD!!!!!
-		 */
+		$this->logDownload();
 		
-		
-		//$byteSent = 0;
 		while(!feof($file))
 		{
 			$data = fread($file, 1204);
 			echo $data;
-			//$byteSent += strlen($data);
 			ob_flush();
 			flush();
 		}
-		
-		//if ($byteSent == $fileSize)
-		//{
-		//	$this->logDownload();
-		//}
 	}
 }
 else

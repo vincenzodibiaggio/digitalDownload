@@ -3,7 +3,9 @@
 include(__DIR__.'/digitalDownload.php');
 use DigitalDownload\DigitalDownload;
 
-if (DigitalDownload::DD_DOWNLOAD_ALLOWED == 1 && DigitalDownload::DD_INSTALL == 0)
+$dd = new DigitalDownload();
+
+if ( 1 == $dd->downloadsAllowed && 0 == $dd->install )
 {
 	session_start();
 	if (!isset($_SESSION['abracadabra']) || !isset($_REQUEST['code'])) { die('The spell has failed :(');}
@@ -20,7 +22,7 @@ if (DigitalDownload::DD_DOWNLOAD_ALLOWED == 1 && DigitalDownload::DD_INSTALL == 
 	else {
 		$_SESSION['ctrl'] = sha1($_SESSION['abracadabra']);
 		session_write_close();
-		$dd = new DigitalDownload($code);
+		$dd->download($code);
 		$f['result'] = 'ok';
 		$f['message'] = $dd->giveReturn();
 		http_response_code($dd->giveResponseCode());
