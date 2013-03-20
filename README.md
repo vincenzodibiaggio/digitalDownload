@@ -2,7 +2,7 @@ digitalDownload
 ==============
 
 ## Short description
-With this class you can manage downloads of file by your website visitors with a code optionally limited by number of use and/or limited by time. You can also create a label with your code printed over an image and download it using a pdf file. I also provided a simple system with a form to use this class if you don't need specific necessities
+With this class you can manage downloads of file by your website visitors with a code optionally limited by number of use and/or limited by time. You can also create a label with your code printed over an image and download it using a pdf file. I also provided a simple system with a form to use this class if you don't have specific necessities
 
 ## Requirements
 * > PHP 5.3 
