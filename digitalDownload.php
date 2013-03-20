@@ -21,14 +21,13 @@ class DigitalDownload
 	
 	protected $host = 'general.dev'; // change this with your domain name
 	
-	public $downloadsAllowed	= 1; // Set to 1 to allow downloads, 0 otherwise
-	
 	public $install	= 1; // Set to 1 to reinstall and regenerate the codes, 0 otherwise
+	public $downloadsAllowed	= 1; // Set to 1 to allow downloads, 0 otherwise
 	public $createLabel = 1; // Create labels at the end of installation
-	public $createPdf = 1; // Create a pdf with the labels at the end of installation
+	public $createPdf = 0; // Create a pdf with the labels at the end of installation
 	public $pdfOrientation = 'L'; // P or L
 	public $pdfDpi = 300; 
-	public $regeneratePdf = 1; // During installation regenerate ONLY the pdf, not the labels
+	public $regeneratePdf = 0; // During installation regenerate ONLY the pdf, not the labels
 	public $downloadPdf = 0; // At the end of installation, or regeneration of pdf: 0 = download directly the pdf, 1 = save pdf in labels directory with name 'labels.pdf'
 	public $pdfMarginX = 10; // Left margin
 	public $pdfMarginY = 10; // Right margin
@@ -41,8 +40,8 @@ class DigitalDownload
 	
 	public $codeLenght = 10; // how many long are the code string?
 	public $codeNum = 2; // how many codes?
-	public $limitNumDownload = 0; // how many time a code is valid? 0 = unlimited 
-	public $limitByHour = 0; // hour numbers from first use to expire 0 = unlimited
+	public $limitNumDownload = 5; // how many time a code is valid? 0 = unlimited 
+	public $limitByHour = 2; // hour numbers from first use to expire 0 = unlimited
 	
 	const DD_DB_HOST = 'localhost';
 	const DD_DB_USER = 'root';
@@ -81,42 +80,36 @@ class DigitalDownload
 	 */
 	public function download($code){
 		try {
-				
-			$date = new \DateTime();
+			$date = new \DateTime('now', new \DateTimeZone('UTC'));
 			$now = $date->format('Y-m-d H:i:s');
 			$dateLimit = '0000-00-00 00:00:00';
-				
+			
 			$conn = self::createDbConnection();
 				
-			$query = 'SELECT COUNT(1) AS allowed, id FROM '.self::DD_DB_CODES_TABLE.' WHERE `code` = :code';
-				
-			if ( $this->limitNumDownload != 0)
-			{
-				$query .= ' AND download_numbers < downloads_number_limit';
-			}
-				
-			if ( $this->limitByHour != 0)
-			{
-				$dateLimit = $date->add(new \DateInterval('P'.$this->limitByHour.'D'));
-		
-				$query .= " AND $now < $dateLimit";
-			}
-				
-			$query .= ' LIMIT 1';
-				
+			$query = 'SELECT id, date_limit, download_numbers, downloads_number_limit FROM '.self::DD_DB_CODES_TABLE.' WHERE code = :code LIMIT 1;';
 			$stmt = $conn->prepare($query);
-			$stmt->execute( array(':code' => $code) );
-				
+			$stmt->bindParam(':code', $code, \PDO::PARAM_STR, $this->codeLenght);
+			$stmt->execute();
 			$result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
-				
-			if (count($result) && $result[0]['allowed'] != 0)
+			
+			if (count($result))
 			{
-				$this->userIp = $_SERVER['REMOTE_ADDR'];
-				$this->downloadDate = $now;
-				$this->code = $code;
-				$this->codeId = $result[0]['id'];
-		
-				$this->makeDownload();
+				if ( $this->limitNumDownload !== 0 && $result[0]['download_numbers'] >= $result[0]['downloads_number_limit'])
+				{
+					$this->responseCode = 203;
+					$this->return = 'With this code you have reached the limit by number';
+				}
+				else if ( $this->limitByHour !== 0 && $result[0]['download_numbers'] > 0 && $now >= $result[0]['date_limit'])
+				{
+					$this->responseCode = 203;
+					$this->return = 'With this code you have reached the limit by time';
+				}
+				else 
+				{
+					$this->code = $code;
+					$this->codeId = $result[0]['id'];
+					$this->makeDownload();
+				}
 			}
 			else {
 				$this->responseCode = 203;
@@ -126,21 +119,26 @@ class DigitalDownload
 			self::closeDbConnetion();
 				
 		} catch( \PDOException $e) {
-			$this->responseCode = 204;
+			$this->responseCode = 203;
 			$this->return = 'ERROR: '.$e->getMessage();
 		}
 	}
 	
 	
-	protected function logDownload()
+	public function logDownload()
 	{
 		try {
+			$obj = unserialize($_SESSION['for_log']);
+			
+			$date = new \DateTime('now', new \DateTimeZone('UTC'));
+			$now = $date->format('Y-m-d H:i:s');
+			
 			$conn = self::createDbConnection();
 			$stmt = $conn->prepare('INSERT INTO '.self::DD_DB_LOG_TABLE.' (code_id, code, user_ip, dowload_date) VALUES(:codeId , :code , :userIp , :downloadDate);');
-			$stmt->execute( array( ':codeId' 		=> $this->codeId,
-									':code' 		=> $this->code,
-									':userIp' 		=> $this->userIp,
-									':downloadDate' => $this->downloadDate) );
+			$stmt->execute( array( ':codeId' 		=> $obj->codeId,
+									':code' 		=> $obj->code,
+									':userIp' 		=> $_SERVER['REMOTE_ADDR'],
+									':downloadDate' => $now) );
 		} catch (PDOException $e) {
 			$this->responseCode = 204;
 			$this->return = 'ERROR: '.$e->getMessage();
@@ -151,13 +149,44 @@ class DigitalDownload
 	
 	protected function makeDownload()
 	{
+		$date = new \DateTime('now', new \DateTimeZone('UTC'));
+		$now = $date->format('Y-m-d H:i:s');
+		
+		$conn = self::createDbConnection();
+		$stmt = $conn->prepare('SELECT download_numbers FROM '.self::DD_DB_CODES_TABLE.' WHERE id = '.$this->codeId.' LIMIT 1;');
+		$stmt->execute();
+		
+		$result = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+		
+		$updateFirstDate = '';
+		$updateLimitDate = '';
+		
+		// on first use I update relative table field
+		if( 0 == $result[0]['download_numbers'])
+		{
+			$updateFirstDate = ' , first_use_date = \''.$now.'\'';				
+		}
+		
+		
+		if ( $this->limitByHour !== 0)
+		{
+			// if I have hour limit on first download I set this limit on database
+			if( 0 == $result[0]['download_numbers'])
+			{
+				$dateLimit = $date->add( new \DateInterval('PT'.$this->limitByHour.'H'));
+				$l = $dateLimit->format('Y-m-d H:i:s');
+				$updateLimitDate = ' , date_limit = \''.$l.'\'';
+			}
+		}
 		
 		$conn =self::createDbConnection();
-		$conn->exec("UPDATE ".self::DD_DB_CODES_TABLE." SET download_numbers = download_numbers + 1 WHERE id = ".$this->codeId.";");
+		$conn->exec("UPDATE ".self::DD_DB_CODES_TABLE." SET 
+					download_numbers = download_numbers + 1 ".$updateFirstDate.$updateLimitDate." WHERE id = ".$this->codeId.";");
+		
 		
 		$this->responseCode = 200;
 		$this->return = 'giveMeTheFile.php?ctrl='.$_SESSION['ctrl'];
-		
+		$_SESSION['for_log'] = serialize($this);
 	}
 	
 	/**
@@ -272,12 +301,12 @@ class DigitalDownload
 				$message .= 'Download is not limited on count'.$this->eof;
 			}
 			else {
-				$message .= 'Every code can be used '.self::DD_LIMIT_NUM_DOWNLOAD.$this->eof;
+				$message .= 'Every code can be used '.$this->limitNumDownload.$this->eof;
 			}
 			
 			if ($this->limitByHour == 0)
 			{
-				$message .= 'Download is not limited on time'.$eof;
+				$message .= 'Download is not limited on time'.$this->eof;
 			}
 			else {
 				$message .= 'Every code can be used for '.$this->limitByHour.' after first download before it expire'.$this->eof;
@@ -340,9 +369,9 @@ class DigitalDownload
 			
 			
 			while (false !== ($file = readdir($handle))) {
-				if ($file != "." && $file != ".." && $file != self::DD_LABEL_BACKGROUND_FILENAME && substr($file, -3) !== 'pdf') {
+				if ($file != "." && $file != ".." && $file != $this->backgroundFileName && substr($file, -3) !== 'pdf') {
 					
-					list($width, $height, $type, $attr) = getimagesize(self::DD_LABELS_DIRECTORY.$file);
+					list($width, $height, $type, $attr) = getimagesize($this->labelsDirectory.$file);
 					
 					if(1 == $first) {
 						$pdf->AddPage();
@@ -368,7 +397,7 @@ class DigitalDownload
 						$pageY = $this->pdfMarginY;
 					}
 					
-					$pdf->Image(self::DD_LABELS_DIRECTORY.$file,$pageX,$pageY, $width, $height);
+					$pdf->Image($this->labelsDirectory.$file,$pageX,$pageY, $width, $height);
 					$pageX = $pageX + $width;
 					$first = 0;
 					
@@ -377,7 +406,7 @@ class DigitalDownload
 			}
 			closedir($handle);
 			
-			if(self::DD_DOWNLOAD_PDF)
+			if($this->downloadPdf)
 			{
 				$pdf->Output($this->labelsDirectory.'/labels.pdf','F');
 				$pdf->Output();
@@ -392,7 +421,7 @@ class DigitalDownload
 	
 	
 	
-	private static function generateLabels()
+	private function generateLabels()
 	{
 		try {
 			$conn = self::createDbConnection();

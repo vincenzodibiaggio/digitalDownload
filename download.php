@@ -4,6 +4,8 @@ include(__DIR__.'/digitalDownload.php');
 use DigitalDownload\DigitalDownload;
 
 $dd = new DigitalDownload();
+$dd->install = 0;
+$dd->downloadsAllowed = 1;
 
 if ( 1 == $dd->downloadsAllowed && 0 == $dd->install )
 {
@@ -16,21 +18,25 @@ if ( 1 == $dd->downloadsAllowed && 0 == $dd->install )
 		$f['result'] = 'ko';
 		$f['message'] = 'The spell has failed :(';
 		session_write_close();
-		http_response_code($dd->giveResponseCode());
+		header("HTTP/1.0 ".$dd->giveResponseCode());
 		echo json_encode($f);
+		
 	}
 	else {
 		$_SESSION['ctrl'] = sha1($_SESSION['abracadabra']);
-		session_write_close();
 		$dd->download($code);
 		$f['result'] = 'ok';
 		$f['message'] = $dd->giveReturn();
-		http_response_code($dd->giveResponseCode());
+		header("HTTP/1.0 ".$dd->giveResponseCode());
 		echo json_encode($f);
 	}
 	
 }
 else 
 {
-	echo "Download not allowed";
+	$f['result'] = 'ko';
+	$f['message'] = 'Download not allowed';
+	session_write_close();
+	header("HTTP/1.0 203");
+	echo json_encode($f);
 }

@@ -4,8 +4,10 @@ include(__DIR__.'/digitalDownload.php');
 use DigitalDownload\DigitalDownload;
 
 $dd = new DigitalDownload();
+$dd->install = 0;
+$dd->downloadsAllowed = 1;
 
-if ( 1 == $dd->downloadsAllowed && 0 == $dd->install)
+if ( 1 == $dd->downloadsAllowed && 0 == $dd->install )
 {
 	session_start();
 	
@@ -16,11 +18,10 @@ if ( 1 == $dd->downloadsAllowed && 0 == $dd->install)
 	if (sha1($_SESSION['abracadabra']) !== $_REQUEST['ctrl']) {
 		echo 'No magic found :(';
 		session_write_close();
-		session_destroy();
 	}
 	else {
-		session_write_close();
-		session_destroy();
+		
+		$dd->logDownload();
 		
 		$fileName = $dd->downloadDirectory.$dd->fileToDownload;
 		$fileSize = filesize($fileName);
@@ -41,8 +42,6 @@ if ( 1 == $dd->downloadsAllowed && 0 == $dd->install)
 		flush();
 		
 		$file = @fopen($fileName,"rb");
-		
-		$this->logDownload();
 		
 		while(!feof($file))
 		{

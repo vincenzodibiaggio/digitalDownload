@@ -4,18 +4,19 @@ include(__DIR__.'/digitalDownload.php');
 use DigitalDownload\DigitalDownload;
 
 $dd = new DigitalDownload();
-$dd->install = 1;
+$dd->install = 0;
+$dd->limitByHour = 2;
+$dd->limitNumDownload = 5;
 
 if (1 == $dd->install)
 {
-	DigitalDownload::installDigitalDownload();
+	$dd->installDigitalDownload();
 }
 else {
 	
 	$random = sha1(rand(1,64654654));
 	session_start();
 	$_SESSION['abracadabra'] = $random;
-	session_write_close();
 ?>
 <html>
 	<head>
