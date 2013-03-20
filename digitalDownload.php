@@ -64,7 +64,18 @@ class DigitalDownload
 	public $regeneratePdf = 0; // During installation regenerate ONLY the pdf, not the labels
 	public $downloadPdf = 0; // At the end of installation, or regeneration of pdf: 0 = download directly the pdf, 1 = save pdf in labels directory with name 'labels.pdf'
 	public $pdfMarginX = 10; // Left margin
-	public $pdfMarginY = 10; // Right margin
+	public $pdfMarginY = 10; // Top margin
+	
+	public $backgroundImagePath = 'labels/'; // image path with trailing slash
+	public $stringColorRed = 0;
+	public $stringColorGreen = 0;
+	public $stringColorBlue = 0;
+	public $fontSize = 30;
+	public $stringAngle = 0;
+	public $startX = 380;
+	public $startY = 374;
+	public $fontName = 'georgia_italic.ttf'; // other free fonts here: http://www.free-fonts-ttf.org/true-type-fonts/
+	public $stringToWrite = ''; // UTF-8 encoded string
 	
 	public $fullPath= DD_DIR;
 	public $downloadDirectory = DD_PATH;
@@ -470,20 +481,20 @@ class DigitalDownload
 				{
 					$image = new writeOverImage();
 					
-					$image->backgroundImagePath = 'labels/'; // image path with trailing slash
+					$image->backgroundImagePath = $this->backgroundImagePath;
 					$image->backgroundImage = $this->backgroundFileName; // image name
-					$image->stringColorRed = 0;
-					$image->stringColorGreen = 0;
-					$image->stringColorBlue = 0;
-					$image->fontSize = 30;
-					$image->stringAngle = 0;
-					$image->startX = 380;
-					$image->startY = 374;
-					$image->fontName = 'georgia_italic.ttf'; // other free fonts here: http://www.free-fonts-ttf.org/true-type-fonts/
-					$image->stringToWrite = $r['code']; // UTF-8 encoded string
-					$image->newFile = true; // if false overwrite base file, if true create a new file with provided filename
-					$image->newFileName = 'label_'.$r['code']; // just the filename. extension will be added automatically
-					$image->outputDirectly = false; // if true send image directly, if false save image file
+					$image->stringColorRed = $this->stringColorRed;
+					$image->stringColorGreen = $this->stringColorGreen;
+					$image->stringColorBlue = $this->stringColorBlue;
+					$image->fontSize = $this->fontSize;
+					$image->stringAngle = $this->stringAngle;
+					$image->startX = $this->startX;
+					$image->startY = $this->startY;
+					$image->fontName = $this->fontName;
+					$image->stringToWrite = $r['code'];
+					$image->newFile = true;
+					$image->newFileName = 'label_'.$r['code'];
+					$image->outputDirectly = false;
 					
 					$image->createImage();
 
